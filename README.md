@@ -136,7 +136,8 @@ VITE_API_URL=your_backend_api
 }
 ```
 ## 🔗 Deployed Link
-[👉 Live Application](https://placeholder.com)
+[Backend](https://voice-notes-ai-0bsk.onrender.com)
+[Frontend](https://placeholder.com)
 
 ## 🛠️ Setup & Run Locally
 #### Clone repo
