@@ -1,58 +1,70 @@
-import { useState, useEffect } from "react";
-import { Mic, Plus, LogOut, Search, Volume2, Clock, Sparkles } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import API from "../api/axiosConfig";
+import { useAuth } from "../context/AuthContext";
+import Recorder from "../components/Recorder";
 import NoteCard from "../components/NoteCard";
 
+// Icons from lucide-react
+import { Mic, LogOut, Search, Volume2, Sparkles, Clock } from "lucide-react";
+import LoadingSpinner from "../components/LoadingSpinner";
+
 export default function Dashboard() {
+  const { logout } = useAuth();
   const [notes, setNotes] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [recording, setRecording] = useState(false);
-  const [mediaRecorder, setMediaRecorder] = useState(null);
+  const [sortKey, setSortKey] = useState("updatedAt");
+  const [order, setOrder] = useState("desc");
 
-  // Fetch notes from backend
-  useEffect(() => {
-    fetch(`${import.meta.env.VITE_API_BASE}/api/notes`)
-      .then((res) => res.json())
-      .then((data) => setNotes(data))
-      .catch((err) => console.error(err));
-  }, []);
-
-  // Start recording
-  const startRecording = async () => {
+  const fetchNotes = async () => {
+    setLoading(true);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
-      setMediaRecorder(recorder);
-
-      const chunks = [];
-      recorder.ondataavailable = (e) => chunks.push(e.data);
-
-      recorder.onstop = async () => {
-        const blob = new Blob(chunks, { type: "audio/webm" });
-        const formData = new FormData();
-        formData.append("file", blob);
-
-        // Send audio to backend
-        const res = await fetch(`${import.meta.env.VITE_API_BASE}/api/notes/upload`, {
-          method: "POST",
-          body: formData,
-        });
-        const newNote = await res.json();
-        setNotes((prev) => [newNote, ...prev]);
-      };
-
-      recorder.start();
-      setRecording(true);
-    } catch (error) {
-      console.error("Error starting recording:", error);
+      const { data } = await API.get("/notes", {
+        params: { search: search || undefined },
+      });
+      setNotes(data);
+    } catch (e) {
+      console.error(e);
+      if (e?.response?.status === 401) logout();
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Stop recording
-  const stopRecording = () => {
-    if (mediaRecorder) {
-      mediaRecorder.stop();
-      setRecording(false);
+  useEffect(() => {
+    fetchNotes();
+  }, []);
+
+  const onTranscript = async (text) => {
+    const title = text?.slice(0, 48) || "New Note";
+    try {
+      const { data } = await API.post("/notes", { title, content: text });
+      setNotes((prev) => [data, ...prev]);
+    } catch (e) {
+      console.error(e);
+      alert("Failed to create note from transcript");
     }
+  };
+
+  const sortedFiltered = useMemo(() => {
+    const arr = [...notes];
+    arr.sort((a, b) => {
+      const av = new Date(a[sortKey] || a.createdAt).getTime();
+      const bv = new Date(b[sortKey] || b.createdAt).getTime();
+      return order === "asc" ? av - bv : bv - av;
+    });
+    return arr;
+  }, [notes, sortKey, order]);
+
+  const onUpdated = (updated) => {
+    setNotes((prev) => prev.map((n) => (n._id === updated._id ? updated : n)));
+  };
+  const onDeleted = (id) =>
+    setNotes((prev) => prev.filter((n) => n._id !== id));
+
+  const onSearch = async (e) => {
+    e.preventDefault();
+    await fetchNotes();
   };
 
   return (
@@ -64,41 +76,40 @@ export default function Dashboard() {
             <Mic className="h-5 w-5 text-white" />
           </div>
           <div>
-            <h1 className="font-bold text-lg text-indigo-600">Voice Notes AI</h1>
+            <h1 className="font-bold text-lg text-indigo-600">
+              Voice Notes AI
+            </h1>
             <p className="text-sm text-gray-500">Welcome back!</p>
           </div>
         </div>
-        <div className="flex gap-3">
-          <button
-            onClick={recording ? stopRecording : startRecording}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg shadow-md text-white font-medium transition ${
-              recording
-                ? "bg-red-500 hover:bg-red-600"
-                : "bg-gradient-to-r from-purple-500 to-indigo-500 hover:opacity-90"
-            }`}
-          >
-            <Plus className="w-4 h-4" />
-            {recording ? "Stop Recording" : "New Note"}
-          </button>
-          <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 text-gray-700 font-medium shadow hover:bg-gray-200">
-            <LogOut className="w-4 h-4" /> Logout
-          </button>
-        </div>
+        <button
+          onClick={logout}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 text-gray-700 font-medium shadow hover:bg-gray-200"
+        >
+          <LogOut className="w-4 h-4" /> Logout
+        </button>
       </div>
 
-      {/* Search bar */}
-      <div className="flex items-center gap-2 bg-white shadow rounded-full px-4 py-2 mb-6">
-        <Search className="text-gray-400 w-4 h-4" />
-        <input
-          type="text"
-          placeholder="Search your notes..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full focus:outline-none text-sm"
-        />
-        <button className="px-4 py-1 bg-gradient-to-r from-purple-500 to-indigo-500 text-white rounded-full shadow hover:opacity-90">
-          Search
-        </button>
+      {/* Recorder + Search */}
+      <div className="bg-white rounded-xl shadow p-4 mb-6 flex flex-col md:flex-row items-center justify-between gap-3">
+        <Recorder onTranscript={onTranscript} />
+        <form
+          onSubmit={onSearch}
+          className="flex items-center gap-2 w-full md:w-auto"
+        >
+          <div className="flex items-center gap-2 bg-white shadow rounded-full px-4 py-2 w-full">
+            <Search className="text-gray-400 w-4 h-4" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search your notes..."
+              className="w-full focus:outline-none text-sm"
+            />
+          </div>
+          <button className="px-4 py-1 bg-gradient-to-r from-purple-500 to-indigo-500 text-white rounded-full shadow hover:opacity-90">
+            Search
+          </button>
+        </form>
       </div>
 
       {/* Stats */}
@@ -124,30 +135,59 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Notes list */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {notes.length === 0 ? (
-          <div className="bg-white shadow rounded-xl p-8 text-center col-span-2">
-            <Mic className="h-10 w-10 text-purple-500 mx-auto mb-3" />
-            <h3 className="text-lg font-bold text-gray-700">No notes yet</h3>
-            <p className="text-gray-500 mb-4">
-              Start creating your first voice note! Click "New Note" to begin recording.
-            </p>
-            <button
-              onClick={startRecording}
-              className="px-4 py-2 rounded-lg bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-medium shadow hover:opacity-90"
-            >
-              <Mic className="w-4 h-4 inline mr-2" /> Create First Note
-            </button>
-          </div>
-        ) : (
-          notes
-            .filter((note) =>
-              note.title.toLowerCase().includes(search.toLowerCase())
-            )
-            .map((note) => <NoteCard key={note._id} note={note} />)
-        )}
+      {/* Sorting */}
+      <div className="flex items-center gap-3 mb-6 bg-white shadow rounded-xl px-4 py-2">
+        <label className="text-sm font-medium text-gray-600">Sort by:</label>
+
+        <select
+          value={sortKey}
+          onChange={(e) => setSortKey(e.target.value)}
+          className="px-3 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 shadow-sm 
+               focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+        >
+          <option value="updatedAt">Updated</option>
+          <option value="createdAt">Created</option>
+        </select>
+
+        <select
+          value={order}
+          onChange={(e) => setOrder(e.target.value)}
+          className="px-3 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 shadow-sm 
+               focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+        >
+          <option value="desc">Descending</option>
+          <option value="asc">Ascending</option>
+        </select>
       </div>
+
+      {/* Notes */}
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <LoadingSpinner />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {sortedFiltered.length === 0 ? (
+            <div className="bg-white shadow rounded-xl p-8 text-center col-span-2">
+              <Mic className="h-10 w-10 text-purple-500 mx-auto mb-3" />
+              <h3 className="text-lg font-bold text-gray-700">No notes yet</h3>
+              <p className="text-gray-500 mb-4">
+                Start creating your first voice note! Click the recorder to
+                begin.
+              </p>
+            </div>
+          ) : (
+            sortedFiltered.map((n) => (
+              <NoteCard
+                key={n._id}
+                note={n}
+                onUpdated={onUpdated}
+                onDeleted={onDeleted}
+              />
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }
