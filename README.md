@@ -135,21 +135,20 @@ VITE_API_URL=your_backend_api
   "content": "Full text of note here..."
 }
 ```
-## 🔗 Deployed Link
+<!-- ## 🔗 Deployed Link
 [Backend](https://voice-notes-ai-0bsk.onrender.com)
-[Frontend](https://placeholder.com)
+[Frontend](https://placeholder.com) -->
 
 ## 🛠️ Setup & Run Locally
 #### Clone repo
 ```
 git clone https://github.com/create-source1/realty-ai-assignment.git
-cd voice-notes-ai
 ```
 ### Backend
 ```
 cd backend
 npm install
-npm run dev
+npm start
 ```
 ### Frontend
 ```
