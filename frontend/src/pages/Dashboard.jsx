@@ -65,7 +65,7 @@ export default function Dashboard() {
           </div>
           <div>
             <h1 className="font-bold text-lg text-indigo-600">Voice Notes AI</h1>
-            <p className="text-sm text-gray-500">Welcome back, Pooja Jaiswal</p>
+            <p className="text-sm text-gray-500">Welcome back!</p>
           </div>
         </div>
         <div className="flex gap-3">
